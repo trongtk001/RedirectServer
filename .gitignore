@@ -1,0 +1,67 @@
+# Build outputs
+bin/
+obj/
+*/bin/
+*/obj/
+out/
+artifacts/
+publish/
+app.publish/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+*.DotSettings.user
+*.Rider/
+.idea/*
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.DotSettings
+
+# ASP.NET / .NET Core
+appsettings*.json
+secrets.json
+Properties/launchSettings.json
+project.lock.json
+project.fragment.lock.json
+*.nupkg
+packages/
+.nuget/packages/
+
+# Test results / coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+coverage*.xml
+
+# Logs, databases, caches
+*.log
+*.db
+*.db-journal
+*.sqlite
+*.cache
+*.pid
+
+# Tools / editor
+.vscode/
+*.bak
+*.tmp
+*.swp
+
+# Publish / packaging
+*.zip
+*.tar.gz
+
+# Ignore Rider and OS specific files (Windows)
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Optional: lock files / local deploy artifacts
+local.settings.json
+.vscode/launch.json
