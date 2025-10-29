@@ -14,7 +14,7 @@ public class PacsClient(HttpClient httpClient, IConfiguration configuration) : I
 {
     public async Task<string> GetPacsTokenAsync(string queryString)
     {
-        var requestUrl = configuration.GetValue<string>("PacsClient:EncryptPath");
+        var requestUrl = "backend/apitemplate/post/FOU7Q96SWB"; // configuration.GetValue<string>("PacsClient:EncryptPath");
 
         var body = new
         {

@@ -1,0 +1,74 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Test ShortLink Controller</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 800px; }
+    input { padding: 6px; width: 300px; }
+    button { margin-left: 8px; padding: 6px 10px; }
+    pre { background:#f6f6f6; padding:12px; border-radius:6px; overflow:auto; }
+    .row { margin: 12px 0; }
+    label { display:block; margin-bottom:6px; }
+  </style>
+</head>
+<body>
+  <h2>ShortLink Controller Tester</h2>
+
+  <div class="row">
+    <label for="shortInput">Short link token</label>
+    <input id="shortInput" type="text" placeholder="enter token (e.g. abc123)" />
+  </div>
+
+  <div class="row">
+    <button id="btnGet">Get Link (api/shortlink/{input})</button>
+    <button id="btnOpen">Open Redirect (api/shortlink/go/{input})</button>
+    <button id="btnOpenEnc">Open Encrypted Redirect (api/shortlink/go/encrypted/{input})</button>
+  </div>
+
+  <div class="row">
+    <label>Result</label>
+    <pre id="output">No requests yet.</pre>
+  </div>
+
+  <script>
+    const apiBase = '/api/shortlink';
+
+    function setOutput(obj) {
+      const out = document.getElementById('output');
+      out.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    async function getLink() {
+      const input = document.getElementById('shortInput').value.trim();
+      if (!input) { setOutput('Please enter a token.'); return; }
+
+      try {
+        const res = await fetch(`${apiBase}/${encodeURIComponent(input)}`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        const text = await res.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
+        setOutput({ status: res.status, ok: res.ok, body: parsed });
+      } catch (err) {
+        setOutput('Fetch error: ' + err.message);
+      }
+    }
+
+    function openRedirect(encrypted = false) {
+      const input = document.getElementById('shortInput').value.trim();
+      if (!input) { setOutput('Please enter a token.'); return; }
+      const path = encrypted ? `${apiBase}/go/encrypted/${encodeURIComponent(input)}` : `${apiBase}/go/${encodeURIComponent(input)}`;
+      // open in a new tab so the tester page stays available
+      window.open(path, '_blank');
+      setOutput('Opened: ' + path);
+    }
+
+    document.getElementById('btnGet').addEventListener('click', getLink);
+    document.getElementById('btnOpen').addEventListener('click', () => openRedirect(false));
+    document.getElementById('btnOpenEnc').addEventListener('click', () => openRedirect(true));
+  </script>
+</body>
+</html>

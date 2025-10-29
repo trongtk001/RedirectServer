@@ -1,97 +1,83 @@
-﻿using RedirectServer.util;
-using System;
-using RedirectServer.client;
+﻿using System.Security.Cryptography;
+using System.Text;
+using Microsoft.EntityFrameworkCore;
+using RedirectServer.Data;
+using RedirectServer.Models;
+using RedirectServer.Request;
 
 namespace RedirectServer.service;
 
 public interface IShortLinkService
 {
-    string GetAdminLink(string input);
+    Task<ShortLink> CreateAsync(CreateRequest createRequest, int length = 7);
 
-    Task<string> GetEncryptedPacsLinkAsync(string input);
+    Task<ShortLink?> ResolveAsync(string code);
 }
 
 public class ShortLinkService : IShortLinkService
 {
-    
-    private static readonly string Key = Environment.GetEnvironmentVariable("key") ?? string.Empty;
-    private readonly string _domain;
-    private readonly IPacsClient _pacsClient;
+    private const string Base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private readonly RandomNumberGenerator _rng = RandomNumberGenerator.Create();
+    private readonly AppDbContext _db;
 
-    public ShortLinkService(IConfiguration configuration, IPacsClient pacsClient)
+    public ShortLinkService(AppDbContext db)
     {
-        _pacsClient = pacsClient;
-        var section = configuration.GetSection("PacsClient");
-        _domain = section.GetValue<string>("BaseUrl") ?? string.Empty;
+        _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
-    public string GetAdminLink(string input)
+    public async Task<ShortLink> CreateAsync(CreateRequest createRequest, int length = 7)
     {
-        var queryParts = BuildQueryParts(input, "admin");
-        return BuildUri(queryParts, "portal");
-    }
+        if (createRequest == null) throw new ArgumentNullException(nameof(createRequest));
+        var originalUrl = createRequest.OriginalUrl;
+        if (string.IsNullOrWhiteSpace(originalUrl)) throw new ArgumentException(nameof(createRequest.OriginalUrl));
+        originalUrl = originalUrl.Trim();
 
-    public async Task<string> GetEncryptedPacsLinkAsync(string input)
-    {
-        var queryParts = BuildQueryParts(input, "encrypted");
-        var token = await _pacsClient.GetPacsTokenAsync(string.Join("&", queryParts));
-        return BuildUri([$"urltoken={Uri.EscapeDataString(token)}"], "portal");
-    }
-    
-    private static List<string> BuildQueryParts(string input, string path)
-    {
-        var username = Uri.EscapeDataString(Environment.GetEnvironmentVariable("USERNAME") ?? string.Empty);
-        var password = Uri.EscapeDataString(Environment.GetEnvironmentVariable("PASSWORD") ?? string.Empty);
-        var rawParam = DecodeInput(input);
-        var encodedPairs = NormalizeAndEncodeQuery(rawParam);
+        // Try to find existing mapping
+        // var existing = await _db.ShortLinks.FirstOrDefaultAsync(s => s.OriginalUrl == originalUrl);
+        // if (existing != null) return existing;
 
-        var queryParts = new List<string>
+        // Generate a unique short code
+        for (int attempt = 0; attempt < 10; attempt++)
         {
-            $"username={username}",
-            $"password={password}",
-            "hide_top=all",
-            "hide_sides=history"
-        };
-
-        queryParts.AddRange(encodedPairs);
-        return queryParts;
-    }
-    
-    private string BuildUri(List<string> queryParts, string path)
-    {
-        var baseUri = new Uri(_domain);
-        return new UriBuilder(baseUri)
-        {
-            Path = $"{baseUri.AbsolutePath}{path}",
-            Query = string.Join("&", queryParts)
-        }.Uri.ToString();
-    }
-
-    private static string DecodeInput(string input)
-    {
-        if (string.IsNullOrEmpty(Key))
-            throw new Exception("No key provided");
-
-        return DecodeXorBase64.Decode(input, Key);
-    }
-
-    private static List<string> NormalizeAndEncodeQuery(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return new List<string>();
-
-        var parts = raw.Split('&', StringSplitOptions.RemoveEmptyEntries);
-        var list = new List<string>(parts.Length);
-
-        foreach (var part in parts)
-        {
-            var idx = part.IndexOf('=');
-            if (idx <= 0) throw new FormatException($"Invalid query part: {part}");
-
-            var key = Uri.EscapeDataString(part[..idx].Trim());
-            var value = Uri.EscapeDataString(part[(idx + 1)..].Trim());
-            list.Add($"{key}={value}");
+            var code = GenerateShortCode(length);
+            if (!await _db.ShortLinks.AnyAsync(s => s.ShortCode == code))
+            {
+                var entry = new ShortLink { ShortCode = code, OriginalUrl = originalUrl, ServiceCode = createRequest.ServiceCode };
+                _db.ShortLinks.Add(entry);
+                await _db.SaveChangesAsync();
+                return entry;
+            }
         }
 
-        return list;
+        // fallback using guid-based code
+        var fallbackCode = Guid.NewGuid().ToString("n").Substring(0, length);
+        var fallbackEntry = new ShortLink { ShortCode = fallbackCode, OriginalUrl = originalUrl };
+        _db.ShortLinks.Add(fallbackEntry);
+        await _db.SaveChangesAsync();
+        return fallbackEntry;
+    }
+
+    public async Task<ShortLink?> ResolveAsync(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+        var entry = await _db.ShortLinks.FirstOrDefaultAsync(s => s.ShortCode == code);
+        if (entry == null) return entry;
+        entry.Clicks++;
+        await _db.SaveChangesAsync();
+
+        return entry;
+    }
+
+    private string GenerateShortCode(int length)
+    {
+        var bytes = new byte[length];
+        _rng.GetBytes(bytes);
+        var sb = new StringBuilder(length);
+        foreach (var b in bytes)
+        {
+            sb.Append(Base62Chars[b % Base62Chars.Length]);
+        }
+
+        return sb.ToString();
     }
 }

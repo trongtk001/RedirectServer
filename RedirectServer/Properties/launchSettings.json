@@ -18,7 +18,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "KEY": "DefaultKey",
-        "USERNAME": "username",
+        "USERNAME": "admin",
         "PASSWORD": "password"
       }
     },
@@ -30,9 +30,10 @@
       "applicationUrl": "https://localhost:7052;http://localhost:5098",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "KEY": "DefaultKey",
-        "USERNAME": "username",
-        "PASSWORD": "password"
+        "KEY": "Wv78fdVzLSZj7UNk1OorvQW86SR+sW9lBv5ng408f2Y=",
+        "USERNAME": "admin",
+        "PASSWORD": "FxYzSX23mAWvUvKMeYruenS4jRS1AzTConlQtTwbVLQ=",
+        "DB_CONNECTION_STRING": "Server=localhost;Database=ShortLinksDB;User Id=sa;Password=strongP@ssw0rd!;MultipleActiveResultSets=true;TrustServerCertificate=True;"
       }
     },
     "IIS Express": {

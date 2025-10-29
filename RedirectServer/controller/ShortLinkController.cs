@@ -1,63 +1,52 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using RedirectServer.Request;
 using RedirectServer.service;
 
 namespace RedirectServer.controller;
 
 [ApiController]
-[Route("api/[controller]")]
 public class ShortLinkController(IShortLinkService shortLinkService) : ControllerBase
 {
-    // GET api/shortlink/{input}
-    [HttpGet("{input}")]
-    public IActionResult GetLink(string input)
+    private readonly IShortLinkService _shortLinkService = shortLinkService ?? throw new ArgumentNullException(nameof(shortLinkService));
+
+    [HttpPost("shortlinks")]
+    public async Task<IActionResult> Create([FromBody] CreateRequest req)
     {
-        try
-        {
-            var link = shortLinkService.GetAdminLink(input);
-            return Ok(new { status = 200, url = link });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { status = 400, error = ex.Message });
-        }
+        // Validate OriginalUrl; parameter is non-nullable so explicit null check is redundant
+        if (string.IsNullOrWhiteSpace(req.OriginalUrl))
+            return BadRequest(new { error = "OriginalUrl is required" });
+
+        var original = req.OriginalUrl.Trim();
+        if (!Uri.TryCreate(original, UriKind.Absolute, out var _))
+            return BadRequest(new { error = "Invalid URL" });
+
+        var entry = await _shortLinkService.CreateAsync(req);
+        var scheme = Request.Scheme;
+        var host = Request.Host.Value;
+        var shortUrl = $"{scheme}://{host}/{entry.ShortCode}";
+        return Ok(new { shortUrl, code = entry.ShortCode });
     }
 
-    // GET api/shortlink/go/{input}
-    [HttpGet("go/{input}")]
-    public IActionResult RedirectToLink(string input)
+    [HttpGet("shortlinks/{code}")]
+    public async Task<IActionResult> Info(string code)
     {
-        try
+        var entry = await _shortLinkService
+            .ResolveAsync(code); // increments clicks; if you don't want that, separate method
+        if (entry == null) return NotFound();
+        return Ok(new
         {
-            var link = shortLinkService.GetAdminLink(input);
-            if (string.IsNullOrWhiteSpace(link))
-                return BadRequest(new { status = 400, error = "Resolved link is empty" });
+            code = entry.ShortCode,
+            originalUrl = entry.OriginalUrl,
+            createdAt = entry.CreatedAt,
+            clicks = entry.Clicks
+        });
+    }
 
-            return Redirect(link);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { status = 400, error = ex.Message });
-        }
-    }
-    
-    // GET api/shortlink/encrypted/{input}
-    [HttpGet("go/encrypted/{input}")]
-    public async Task<IActionResult> RedirectToEncryptedPacsLink(string input)
+    [HttpGet("{code}")]
+    public async Task<IActionResult> RedirectToOriginal(string code)
     {
-        try
-        {
-            var link = await shortLinkService.GetEncryptedPacsLinkAsync(input);
-            
-            if (string.IsNullOrWhiteSpace(link))
-                return BadRequest(new { status = 400, error = "Resolved link is empty" });
-            
-            return Redirect(link);
-            
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { status = 400, error = ex.Message });
-        }
+        var entry = await _shortLinkService.ResolveAsync(code);
+        if (entry == null) return NotFound();
+        return RedirectPreserveMethod(entry.OriginalUrl);
     }
-    
 }

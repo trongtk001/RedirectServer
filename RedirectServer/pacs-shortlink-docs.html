@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tài liệu nhanh: RedirectServer (PACS & ShortLink)</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown-light.min.css"
+        integrity="sha512-MJKW9ZRPbF/x8ytjIYqQcfDApFF4kzqRg6xDeG0rh6wzdkZ3V9eVulqRaa1y6DwvOa5+Eeh7/OPJvOdcUMQ8Sw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+  <style>
+    :root {
+      --bg-primary: #f8f9fa;
+      --bg-secondary: white;
+      --text-primary: #24292e;
+      --text-secondary: #586069;
+      --border-color: #e1e4e8;
+      --code-bg: #f6f8fa;
+      --shadow: rgba(0,0,0,0.1);
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --border-color: #30363d;
+        --code-bg: #1c2128;
+        --shadow: rgba(0,0,0,0.3);
+      }
+    }
+    
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 45px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px var(--shadow);
+    }
+    pre {
+      border-radius: 6px;
+      background-color: #0d1117 !important;
+      padding: 16px;
+      overflow-x: auto;
+      border: 1px solid #30363d;
+    }
+    code {
+      font-family: "Fira Code", monospace;
+      background-color: rgba(110, 118, 129, 0.2);
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: var(--text-primary);
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+      color: #c9d1d9;
+    }
+    h1, h2, h3 {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 5px;
+      margin-top: 30px;
+      color: var(--text-primary);
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border-color);
+      margin: 30px 0;
+    }
+    a {
+      color: #58a6ff;
+    }
+    @media (prefers-color-scheme: dark) {
+      a {
+        color: #58a6ff;
+      }
+    }
+  </style>
+</head>
+<body>
+  <article class="markdown-body">
+    <h1>Tài liệu nhanh: RedirectServer (PACS & ShortLink)</h1>
+
+    <p>
+      Tài liệu này mô tả nhanh cách cấu hình và sử dụng hai phần chính của dự án:
+    </p>
+    <ul>
+      <li>Dịch vụ PACS (tạo link unencrypted / encrypted)</li>
+      <li>Dịch vụ ShortLink (rút gọn URL)</li>
+    </ul>
+
+    <p><strong>Nội dung chính:</strong> cấu hình, biến môi trường, các endpoint, ví dụ curl, và cách đăng ký DI.</p>
+
+    <hr />
+
+    <h2>1. Mô tả chung</h2>
+    <ul>
+      <li>Dự án là một API nhỏ cho phép tạo link tới hệ thống PACS (có thể ở dạng plaintext hoặc encrypted token) và một dịch vụ rút gọn link (shortlink).</li>
+      <li>Các controller chính:
+        <ul>
+          <li><code>PacsLinkController</code> (route base: <code>/api/PacsLink</code>) — exposes endpoints để tạo link PACS.</li>
+          <li><code>ShortLinkController</code> — endpoints để tạo/tra cứu/redirect shortlink.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h2>2. Cấu hình (appsettings / env)</h2>
+    <p>Các cấu hình chính nằm ở <code>appsettings.json</code> dưới khóa <code>PacsClient</code>:</p>
+    <ul>
+      <li><code>PacsClient:BaseUrl</code> – URL gốc của PACS portal (ví dụ: <code>http://pacs.example.com/portal</code>).</li>
+      <li><code>PacsClient:ImagePath</code> – path mà hình ảnh hoặc view được đặt (ví dụ: <code>portal</code>).</li>
+      <li><code>PacsClient:EncryptPath</code> – endpoint (relative) để gọi API encryption/token (nếu cần).</li>
+      <li><code>PacsClient:DefaultExpirationDays</code> – (tùy chọn) số ngày mặc định cho expiration.</li>
+    </ul>
+
+    <p><strong>Ví dụ (từ <code>appsettings.json</code>):</strong></p>
+    <pre><code class="json">"PacsClient": {
+    "BaseUrl": "http://pacs.benhvienungbuou.vn:8081/portal",
+    "EncryptPath": "portal/CSPublicQueryService/CSPublicQueryService.svc/json/EncryptQSSecure?embed_cred=1",
+    "ImagePath": "portal"
+}</code></pre>
+
+    <p><strong>Biến môi trường quan trọng</strong> (thường đặt trong <code>launchSettings.json</code> cho dev):</p>
+    <ul>
+      <li><code>KEY</code> – khóa dùng cho giải mã XOR+Base64 nếu mã hóa input được dùng.</li>
+      <li><code>USERNAME</code> – username để đưa vào query tới PACS.</li>
+      <li><code>PASSWORD</code> – password tương ứng.</li>
+      <li><code>DB_CONNECTION_STRING</code> – chuỗi kết nối DB.</li>
+    </ul>
+
+    <h2>3. Các endpoint</h2>
+
+    <h3>3.1 PACS links (<code>PacsLinkController</code>) — base: <code>/api/PacsLink</code></h3>
+    <ul>
+      <li>
+        <strong>GET</strong> <code>/api/PacsLink/unencrypted?input={rawQuery}</code><br/>
+        Mô tả: tạo link chưa mã hóa (dùng trực tiếp các cặp query được cung cấp).<br/>
+        Tham số <code>input</code>: chuỗi query (ví dụ <code>patient_id=0288461&accession_number=170831-0002</code>) hoặc dữ liệu đã được mã hóa tùy implement.<br/>
+        Trả về: object JSON <code>PacsLink</code> có ít nhất <code>Url</code> và <code>Message</code>.
+      </li>
+      <li>
+        <strong>GET</strong> <code>/api/PacsLink/encrypted?input={rawQuery}</code><br/>
+        Mô tả: tạo link encrypted: api sẽ gọi PACS token service (qua <code>IPacsClient</code>) để lấy token rồi đóng gói vào URL.<br/>
+        Trả về: <code>PacsLink</code> với <code>Url</code>, <code>Token</code>, <code>Message</code>.
+      </li>
+    </ul>
+
+    <p><strong>Ví dụ truy vấn (curl):</strong></p>
+    <pre><code class="bash">curl "http://localhost:5098/api/PacsLink/unencrypted?input=patient_id=0288461&accession_number=170831-0002"
+
+curl "http://localhost:5098/api/PacsLink/encrypted?input=patient_id=0288461&accession_number=170831-0002"</code></pre>
+
+    <p><strong>Lưu ý:</strong> <code>input</code> phải được url-encode khi chứa ký tự đặc biệt.</p>
+
+    <h3>3.2 ShortLink (<code>ShortLinkController</code>)</h3>
+    <ul>
+      <li>
+        <strong>POST</strong> <code>/shortlinks</code>  (body JSON)<br/>
+        Body: <code>{ "OriginalUrl": "https://example.com/full/path" }</code><br/>
+        Trả về: <code>{ shortUrl, code }</code> (shortUrl là URL đầy đủ tới redirect endpoint).
+      </li>
+      <li>
+        <strong>GET</strong> <code>/shortlinks/{code}</code><br/>
+        Mô tả: lấy thông tin meta (originalUrl, clicks, createdAt).
+      </li>
+      <li>
+        <strong>GET</strong> <code>/{code}</code><br/>
+        Redirect (HTTP 302) tới <code>OriginalUrl</code>.
+      </li>
+    </ul>
+
+    <p><strong>Ví dụ (curl):</strong></p>
+    <pre><code class="bash">curl -X POST "http://localhost:5098/shortlinks" \
+-H "Content-Type: application/json" \
+-d '{"OriginalUrl":"https://example.com/foo"}'</code></pre>
+
+    <h2>4. Dạng <code>input</code> cho PACS</h2>
+    <p><code>input</code> mong đợi là một chuỗi query-like gồm cặp <code>key=value</code> phân tách bởi <code>&</code>.</p>
+    <pre><code class="sql">patient_id=0288461&accession_number=170831-0002</code></pre>
+
+    <h2>5. Triển khai & chạy (dev)</h2>
+    <ul>
+      <li>Mặc định config trong <code>Properties/launchSettings.json</code> có profile <code>http</code> port = <code>5098</code>.</li>
+      <li>Run bằng Visual Studio hoặc <code>dotnet run</code> từ thư mục <code>RedirectServer</code>.</li>
+    </ul>
+
+    <p><strong>Kiểm tra nhanh:</strong></p>
+    <pre><code class="bash">curl http://localhost:5098/swagger
+curl "http://localhost:5098/api/PacsLink/unencrypted?input=studyUID=1"</code></pre>
+
+  </article>
+</body>
+</html>
