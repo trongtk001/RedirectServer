@@ -1,4 +1,4 @@
-﻿# RedirectServer
+# RedirectServer
 
 Small C# HTTP service that decodes XOR+Base64 short links and redirects users to PACS backend endpoints.
 # Components
@@ -15,6 +15,7 @@ Edit `appsettings.json` and set the following under `PacsClient`:
 - `BaseUrl` — base URL of the PACS backend (e.g. `https://pacq9.benhvienungbuou.vn/portal`)
 - `EncryptPath` — endpoint path for encryption requests (e.g. `/CSPublicQueryService/CSPublicQueryService.svc/json/EncryptQSSecure?embed_cred=1`)
 - `DefaultExpirationDays` — default expiration for generated values
+
 Edit `launchSettings.json` to set environment variables:
 - `KEY` — encryption key used in XOR+Base64 encoding/decoding (must match PACS backend)'
 - `USERNAME` — username for PACS backend authentication
